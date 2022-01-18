@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include <cutils/multiuser.h>
+#include <fscrypt/fscrypt.h>
 
 bool fscrypt_initialize_systemwide_keys();
 
@@ -38,3 +40,5 @@ bool fscrypt_destroy_user_storage(const std::string& volume_uuid, userid_t user_
 
 bool fscrypt_destroy_volume_keys(const std::string& volume_uuid);
 bool is_metadata_wrapped_key_supported();
+bool lookup_key_ref(const std::map<userid_t, android::fscrypt::EncryptionPolicy>& key_map, userid_t user_id,
+                           std::string* raw_ref);
