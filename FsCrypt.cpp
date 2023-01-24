@@ -120,6 +120,7 @@ std::map<userid_t, EncryptionPolicy> s_de_policies;
 std::map<userid_t, EncryptionPolicy> s_ce_policies;
 
 std::string de_key_raw_ref;
+bool retry = true;
 
 // Returns KeyGeneration suitable for key as described in EncryptionOptions
 static KeyGeneration makeGen(const EncryptionOptions& options) {
@@ -281,7 +282,7 @@ static bool init_data_file_encryption_options() {
                       "this flag from the device's fstab";
         return false;
     }
-    if (s_data_options.version == 1) {
+    if (s_data_options.version == 1 || !retry) {
         s_data_options.use_hw_wrapped_key =
             GetEntryForMountPoint(&fstab_default, DATA_MNT_POINT)->fs_mgr_flags.wrapped_key;
     }
@@ -503,14 +504,23 @@ bool fscrypt_initialize_systemwide_keys() {
     if (!init_data_file_encryption_options()) return false;
 
     KeyBuffer device_key;
+install:
     if (!retrieveOrGenerateKey(device_key_path, device_key_temp, kEmptyAuthentication,
                                makeGen(s_data_options), &device_key))
         return false;
 
     // This initializes s_device_policy, which is a global variable so that
     // fscrypt_init_user0() can access it later.
-    if (!install_storage_key(DATA_MNT_POINT, s_data_options, device_key, &s_device_policy))
+    if (!install_storage_key(DATA_MNT_POINT, s_data_options, device_key, &s_device_policy)) {
+        if (retry) {
+            printf("Trying %s wrappedkey\n", s_data_options.use_hw_wrapped_key ? "without" : "with");
+            GetEntryForMountPoint(&fstab_default, DATA_MNT_POINT)->fs_mgr_flags.wrapped_key =
+                s_data_options.use_hw_wrapped_key = !s_data_options.use_hw_wrapped_key;
+            retry = false;
+            goto install;
+        }
         return false;
+    }
 
     std::string options_string;
     if (!OptionsToString(s_device_policy.options, &options_string)) {
